@@ -42,3 +42,13 @@ export const SESSION_SECRET = () => process.env.SESSION_SECRET || getEnvOrThrow(
 export const RATE_LIMIT_RPM = () => parseInt(process.env.RATE_LIMIT_RPM || "30", 10);
 
 export const PRESIGNED_URL_EXPIRY = 600; // 10 minutes
+
+// Vision AI configuration (optional – enables auto-rename)
+// Supports OpenAI API or any compatible endpoint (e.g. abacus.ai)
+// Set VISION_API_KEY (or OPENAI_API_KEY) + optionally VISION_API_ENDPOINT and VISION_MODEL
+export const VISION_CONFIG = {
+  get apiKey() { return process.env.VISION_API_KEY || process.env.OPENAI_API_KEY || ""; },
+  get endpoint() { return process.env.VISION_API_ENDPOINT || "https://api.openai.com/v1/chat/completions"; },
+  get model() { return process.env.VISION_MODEL || "gpt-4o-mini"; },
+  get enabled() { return !!this.apiKey; },
+};

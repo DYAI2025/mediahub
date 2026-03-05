@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import LoginForm from "@/components/LoginForm";
 import UploadCard from "@/components/UploadCard";
-import RecentUploads from "@/components/RecentUploads";
+import MediaLibrary, { MediaLibraryHandle } from "@/components/MediaLibrary";
 
 export default function Home() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const libraryRef = useRef<MediaLibraryHandle>(null);
 
   useEffect(() => {
     fetch("/api/auth/check")
@@ -44,8 +45,8 @@ export default function Home() {
         </button>
       </header>
 
-      <UploadCard />
-      <RecentUploads />
+      <UploadCard onUploadComplete={() => libraryRef.current?.refresh()} />
+      <MediaLibrary ref={libraryRef} />
     </main>
   );
 }

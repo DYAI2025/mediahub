@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const objects = await listObjects("uploads/", 50);
+    const objects = await listObjects("uploads/", 500);
     const baseUrl = PUBLIC_BASE_URL().replace(/\/$/, "");
 
     const items = objects.map((obj) => ({
