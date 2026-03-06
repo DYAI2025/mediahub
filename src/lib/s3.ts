@@ -27,16 +27,17 @@ function getClient(): S3Client {
 export async function createPresignedUploadUrl(
   key: string,
   contentType: string,
-  contentLength: number
+  contentLength: number,
+  originalName?: string
 ): Promise<string> {
   const command = new PutObjectCommand({
     Bucket: S3_CONFIG.bucket,
     Key: key,
     ContentType: contentType,
     ContentLength: contentLength,
-    // Security headers
     Metadata: {
       "uploaded-via": "mediahub",
+      ...(originalName ? { "original-name": originalName } : {}),
     },
   });
 
@@ -55,25 +56,41 @@ export async function deleteObject(key: string): Promise<void> {
 
 export async function listObjects(
   prefix: string = "uploads/",
-  maxKeys: number = 50
+  maxKeys: number = 1000
 ): Promise<Array<{ key: string; size: number; lastModified: Date | undefined }>> {
-  const command = new ListObjectsV2Command({
-    Bucket: S3_CONFIG.bucket,
-    Prefix: prefix,
-    MaxKeys: maxKeys,
+  const allObjects: Array<{ key: string; size: number; lastModified: Date | undefined }> = [];
+  let continuationToken: string | undefined;
+
+  // Paginate through ALL objects in the bucket
+  do {
+    const command = new ListObjectsV2Command({
+      Bucket: S3_CONFIG.bucket,
+      Prefix: prefix,
+      MaxKeys: Math.min(maxKeys, 1000), // S3 max per request
+      ContinuationToken: continuationToken,
+    });
+
+    const response = await getClient().send(command);
+
+    for (const obj of response.Contents || []) {
+      if (obj.Key && obj.Size && obj.Size > 0) {
+        allObjects.push({
+          key: obj.Key,
+          size: obj.Size,
+          lastModified: obj.LastModified,
+        });
+      }
+    }
+
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  // Sort newest first
+  allObjects.sort((a, b) => {
+    const da = a.lastModified?.getTime() || 0;
+    const db = b.lastModified?.getTime() || 0;
+    return db - da;
   });
 
-  const response = await getClient().send(command);
-
-  return (response.Contents || [])
-    .sort((a, b) => {
-      const da = a.LastModified?.getTime() || 0;
-      const db = b.LastModified?.getTime() || 0;
-      return db - da; // newest first
-    })
-    .map((obj) => ({
-      key: obj.Key || "",
-      size: obj.Size || 0,
-      lastModified: obj.LastModified,
-    }));
+  return allObjects;
 }

@@ -37,19 +37,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate key: uploads/YYYY/MM/<uuid>.<ext>
+    // Generate key: uploads/YYYY/MM/<readable-name>_<short-id>.<ext>
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const ext = body.filename.split(".").pop()?.toLowerCase();
-    const uuid = randomUUID();
-    const key = `uploads/${year}/${month}/${uuid}.${ext}`;
+    const shortId = randomUUID().split("-")[0]; // 8 chars for uniqueness
 
-    // Create presigned URL
+    // Build readable slug from filename (without extension)
+    const nameWithoutExt = body.filename.replace(/\.[^.]+$/, "");
+    const slug = nameWithoutExt
+      .toLowerCase()
+      .replace(/[^a-z0-9äöüß\-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .substring(0, 60) || "datei";
+
+    const key = `uploads/${year}/${month}/${slug}_${shortId}.${ext}`;
+
+    // Create presigned URL (store original filename in metadata)
     const uploadUrl = await createPresignedUploadUrl(
       key,
       body.contentType,
-      body.size
+      body.size,
+      body.filename
     );
 
     const baseUrl = PUBLIC_BASE_URL().replace(/\/$/, "");
@@ -90,7 +101,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const objects = await listObjects("uploads/", 500);
+    const objects = await listObjects("uploads/");
     const baseUrl = PUBLIC_BASE_URL().replace(/\/$/, "");
 
     const items = objects.map((obj) => ({
