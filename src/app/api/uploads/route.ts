@@ -101,17 +101,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const query = req.nextUrl.searchParams.get("q")?.trim().toLowerCase() || "";
     const objects = await listObjects("uploads/");
     const baseUrl = PUBLIC_BASE_URL().replace(/\/$/, "");
 
-    const items = objects.map((obj) => ({
-      key: obj.key,
-      publicUrl: `${baseUrl}/${obj.key}`,
-      size: obj.size,
-      lastModified: obj.lastModified?.toISOString(),
-    }));
+    const items = objects
+      .filter((obj) => !query || obj.key.toLowerCase().includes(query))
+      .map((obj) => ({
+        key: obj.key,
+        publicUrl: `${baseUrl}/${obj.key}`,
+        downloadUrl: `${baseUrl}/${obj.key}?download=1`,
+        size: obj.size,
+        lastModified: obj.lastModified?.toISOString(),
+      }));
 
-    return NextResponse.json({ items, count: items.length });
+    return NextResponse.json({ items, count: items.length, query });
   } catch (err) {
     console.error("List uploads failed:", err);
     return NextResponse.json(
