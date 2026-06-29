@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } fro
 interface MediaItem {
   key: string;
   publicUrl: string;
+  downloadUrl: string;
   size: number;
   lastModified?: string;
   category: "image" | "video" | "audio" | "other";
@@ -42,6 +43,7 @@ const MediaLibrary = forwardRef<MediaLibraryHandle>(function MediaLibrary(_, ref
   const [loading, setLoading] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<Category>>(new Set());
+  const [searchTerm, setSearchTerm] = useState("");
 
   const fetchUploads = useCallback(async () => {
     setLoading(true);
@@ -49,8 +51,9 @@ const MediaLibrary = forwardRef<MediaLibraryHandle>(function MediaLibrary(_, ref
       const res = await fetch("/api/uploads");
       if (res.ok) {
         const data = await res.json();
-        const enriched: MediaItem[] = (data.items || []).map((item: Omit<MediaItem, "category">) => ({
+        const enriched: MediaItem[] = (data.items || []).map((item: Omit<MediaItem, "category" | "downloadUrl"> & { downloadUrl?: string }) => ({
           ...item,
+          downloadUrl: item.downloadUrl || `${item.publicUrl}?download=1`,
           category: categorizeFile(item.key),
         }));
         setItems(enriched);
@@ -111,9 +114,21 @@ const MediaLibrary = forwardRef<MediaLibraryHandle>(function MediaLibrary(_, ref
     });
   };
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const visibleItems = normalizedSearch
+    ? items.filter((item) => {
+        const fileName = item.key.split("/").pop() || item.key;
+        return (
+          item.key.toLowerCase().includes(normalizedSearch) ||
+          fileName.toLowerCase().includes(normalizedSearch) ||
+          item.category.toLowerCase().includes(normalizedSearch)
+        );
+      })
+    : items;
+
   // Group by category
   const grouped: Record<Category, MediaItem[]> = { image: [], video: [], audio: [] };
-  for (const item of items) {
+  for (const item of visibleItems) {
     if (item.category in grouped) {
       grouped[item.category as Category].push(item);
     }
@@ -128,28 +143,67 @@ const MediaLibrary = forwardRef<MediaLibraryHandle>(function MediaLibrary(_, ref
   }
 
   const totalCount = items.length;
+  const visibleCount = visibleItems.length;
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold">
           Mediathek
           <span className="text-sm font-normal text-gray-500 ml-2">
             {totalCount} {totalCount === 1 ? "Datei" : "Dateien"}
           </span>
         </h2>
-        <button
-          onClick={fetchUploads}
-          className="text-sm text-gray-400 hover:text-white transition"
-        >
-          ↻ Aktualisieren
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="relative">
+            <span className="sr-only">Mediathek durchsuchen</span>
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Dateien suchen…"
+              className="w-full sm:w-72 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 pr-9 text-sm text-gray-100 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                aria-label="Suche löschen"
+              >
+                ×
+              </button>
+            )}
+          </label>
+          <button
+            onClick={fetchUploads}
+            className="text-sm text-gray-400 hover:text-white transition"
+          >
+            ↻ Aktualisieren
+          </button>
+        </div>
       </div>
+
+      {normalizedSearch && (
+        <p className="text-sm text-gray-400">
+          {visibleCount} Treffer für „{searchTerm.trim()}“
+        </p>
+      )}
 
       {totalCount === 0 ? (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-8 text-center">
           <p className="text-gray-500">Noch keine Dateien vorhanden.</p>
+        </div>
+      ) : visibleCount === 0 ? (
+        <div className="bg-gray-900 rounded-xl border border-gray-800 p-8 text-center">
+          <p className="text-gray-500">Keine Dateien zur Suche gefunden.</p>
+          <button
+            onClick={() => setSearchTerm("")}
+            className="mt-3 text-sm text-blue-400 hover:text-blue-300"
+          >
+            Suche zurücksetzen
+          </button>
         </div>
       ) : (
         (Object.keys(CATEGORY_CONFIG) as Category[]).map((cat) => {
@@ -238,6 +292,13 @@ const MediaLibrary = forwardRef<MediaLibraryHandle>(function MediaLibrary(_, ref
                         >
                           {copiedKey === item.key ? "✓ Kopiert" : "📋 URL"}
                         </button>
+                        <a
+                          href={item.downloadUrl}
+                          className="px-3 py-1.5 text-xs bg-green-700 hover:bg-green-600 rounded transition"
+                          title="Herunterladen"
+                        >
+                          ⬇
+                        </a>
                         <a
                           href={item.publicUrl}
                           target="_blank"

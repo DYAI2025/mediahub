@@ -73,7 +73,7 @@ export async function listObjects(
     const response = await getClient().send(command);
 
     for (const obj of response.Contents || []) {
-      if (obj.Key && obj.Size && obj.Size > 0) {
+      if (obj.Key && obj.Size !== undefined) {
         allObjects.push({
           key: obj.Key,
           size: obj.Size,

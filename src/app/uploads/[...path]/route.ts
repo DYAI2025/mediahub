@@ -24,11 +24,24 @@ const CACHE_HEADERS = {
   "X-Content-Type-Options": "nosniff",
 };
 
+function getSafeDownloadName(key: string): string {
+  const fallback = "download";
+  const name = key.split("/").pop() || fallback;
+  return name.replace(/[\r\n"]/g, "_") || fallback;
+}
+
+function contentDisposition(filename: string): string {
+  const asciiName = filename.replace(/[^\x20-\x7E]/g, "_");
+  const encodedName = encodeURIComponent(filename);
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
   const key = `uploads/${params.path.join("/")}`;
+  const forceDownload = req.nextUrl.searchParams.get("download") === "1";
 
   try {
     const command = new GetObjectCommand({
@@ -51,6 +64,9 @@ export async function GET(
         "Content-Type": response.ContentType || "application/octet-stream",
         ...(response.ContentLength && {
           "Content-Length": String(response.ContentLength),
+        }),
+        ...(forceDownload && {
+          "Content-Disposition": contentDisposition(getSafeDownloadName(key)),
         }),
         ...CACHE_HEADERS,
       },
