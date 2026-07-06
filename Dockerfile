@@ -1,16 +1,20 @@
 FROM node:22-alpine AS base
 
-# Install dependencies
+# Install all dependencies needed for Next.js build-time module resolution.
+# The runtime image copies only the standalone output, so dev dependencies do not
+# ship in the final container.
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 # Build
 FROM base AS builder
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p public
 RUN npm run build
 
 # Run
